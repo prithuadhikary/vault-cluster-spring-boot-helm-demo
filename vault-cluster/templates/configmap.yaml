@@ -1,0 +1,34 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ca
+data:
+  tls.crt: |
+{{ .Values.caCert | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-script
+data:
+  vault-init.sh: |
+{{ .Files.Get "resources/vault-init.sh" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: certificate-writer-scripts
+data:
+  write-keystore.sh: |
+{{ .Files.Get "resources/write-keystore.sh" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-policies
+data:
+  create-token.hcl: |
+{{ .Files.Get "resources/vault-policies/create-token.hcl" | indent 4 }}
+  read-secret.hcl: |
+{{ .Files.Get "resources/vault-policies/read-secret.hcl" | indent 4 }}

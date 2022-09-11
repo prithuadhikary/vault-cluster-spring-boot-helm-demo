@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app-deploment
+spec:
+  selector:
+    matchLabels:
+      app: demo-app
+  template:
+    metadata:
+      labels:
+        app: demo-app
+    spec:
+      volumes:
+        - name: app-secrets
+          persistentVolumeClaim:
+            claimName: app-secrets-claim
+      containers:
+        - name: demo-app
+          image: 117826729006.dkr.ecr.us-east-1.amazonaws.com/demo-app:1.0
+          imagePullPolicy: Always
+          volumeMounts:
+            - mountPath: /app-secrets
+              name: app-secrets
+          env:
+            - name: KEYSTORE
+              value: /app-secrets/keystore.p12
+            - name: TRUSTSTORE
+              value: /app-secrets/truststore.jks
+            - name: KEYSTORE_PASSWORD
+              value: changeit
+            - name: TRUSTSTORE_PASSWORD
+              value: changeit
+            - name: VAULT_SERVER
+              value: {{.Release.Name}}-active.{{.Release.Namespace}}.svc.{{.Values.clusterDomain}}

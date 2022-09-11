@@ -1,0 +1,88 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-initialiser-job
+spec:
+  template:
+    metadata:
+      labels:
+        app: vault-initialiser
+    spec:
+      restartPolicy: OnFailure
+      volumes:
+        - name: app-cert
+          secret:
+            secretName: app-cert
+        - name: ca
+          configMap:
+            name: ca
+        - name: vault-script
+          configMap:
+            name: vault-script
+        - name: vault-policies
+          configMap:
+            name: vault-policies
+      containers:
+        - name: vault-intialiser
+          image: vault:latest
+          imagePullPolicy: Always
+          volumeMounts:
+            - mountPath: /app-cert
+              name: app-cert
+            - mountPath: /ca
+              name: ca
+            - mountPath: /vault-script
+              name: vault-script
+            - mountPath: /vault-policies
+              name: vault-policies
+          env:
+            - name: APP_CERT
+              value: /app-cert
+            - name: VAULT_ADDR
+              value: https://{{.Release.Name}}-0.{{.Release.Name}}-internal.{{.Release.Namespace}}.svc.{{.Values.clusterDomain}}:8200
+            - name: VAULT_CACERT
+              value: /ca/tls.crt
+          command: [ "/bin/sh" ]
+          args:
+            - -c
+            - >-
+              sh /vault-script/vault-init.sh
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: certificate-writer
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      volumes:
+        - name: app-cert
+          secret:
+            secretName: app-cert
+        - name: app-secrets
+          persistentVolumeClaim:
+            claimName: app-secrets-claim
+        - name: ca
+          configMap:
+            name: ca
+        - name: scripts
+          configMap:
+            name: certificate-writer-scripts
+      containers:
+        - name: certificate-writer
+          image: eclipse-temurin:latest
+          volumeMounts:
+            - mountPath: /app-cert
+              name: app-cert
+            - mountPath: /app-secrets
+              name: app-secrets
+            - mountPath: /ca
+              name: ca
+            - mountPath: /scripts
+              name: scripts
+          command: ["/bin/bash"]
+          args:
+            - -c
+            - >-
+              sh /scripts/write-keystore.sh

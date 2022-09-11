@@ -1,0 +1,151 @@
+
+clusterDomain: cluster.local
+
+vault:
+  global:
+    enabled: true
+    tlsDisable: false
+
+  injector:
+    enabled: false
+
+  server:
+    # Not to be done in production.
+    affinity: { }
+
+    # Use the Enterprise Image
+    image:
+      repository: "vault"
+      tag: "1.9.9"
+
+    # These Resource Limits are in line with node requirements in the
+    # Vault Reference Architecture for a Small Cluster
+    resources:
+      requests:
+        memory: 1Gi
+        cpu: 800m
+      limits:
+        memory: 1Gi
+        cpu: 800m
+
+    # For HA configuration and because we need to manually init the vault,
+    # we need to define custom readiness/liveness Probe settings
+    readinessProbe:
+      enabled: true
+      path: "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"
+    livenessProbe:
+      enabled: true
+      path: "/v1/sys/health?standbyok=true"
+      initialDelaySeconds: 60
+
+    # extraEnvironmentVars is a list of extra environment variables to set with the stateful set. These could be
+    # used to include variables required for auto-unseal.
+    extraEnvironmentVars:
+      VAULT_CACERT: /vault/userconfig/ca/tls.crt
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: AKIARW3YFGQXKTS33UMU
+      AWS_SECRET_ACCESS_KEY: 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
+      VAULT_AWSKMS_SEAL_KEY_ID: 73765c4a-adc7-4d73-805f-0c228c151fcc
+
+    # extraVolumes is a list of extra volumes to mount. These will be exposed
+    # to Vault in the path `/vault/userconfig/<name>/`.
+    extraVolumes:
+      - type: secret
+        name: tls-server
+      - type: configMap
+        name: ca
+
+#    extraInitContainers:
+#      - name: permission-updater
+#        image: busybox:latest
+#        volumeMounts:
+#          - mountPath: /vault/data
+#            name: data
+#        command: ["/bin/sh"]
+#        args:
+#          - -c
+#          - >-
+#            chmod -R 700 /vault/data &&
+#            chown -R 100:1000 /vault/data
+
+    # This configures the Vault Statefulset to create a PVC for audit logs.
+    # See https://www.vaultproject.io/docs/audit/index.html to know more
+    auditStorage:
+      enabled: false
+
+    dataStorage:
+      enabled: true
+      size: 1Gi
+
+    standalone:
+      enabled: false
+
+    # Run Vault in "HA" mode.
+    ha:
+      enabled: true
+      replicas: 3
+      raft:
+        enabled: true
+        setNodeId: true
+
+        config: |
+          ui = true
+          listener "tcp" {
+            address = "[::]:8200"
+            cluster_address = "[::]:8201"
+            tls_cert_file = "/vault/userconfig/tls-server/fullchain.pem"
+            tls_key_file = "/vault/userconfig/tls-server/server.key"
+            tls_client_ca_file = "/vault/userconfig/tls-server/client-auth-ca.pem"
+          }
+
+          storage "raft" {
+            path = "/vault/data"
+
+            retry_join {
+              leader_api_addr = "https://vault-cluster-0.vault-internal.vault.svc.cluster.local:8200"
+              leader_ca_cert_file = "/vault/userconfig/ca/tls.crt"
+              leader_client_cert_file = "/vault/userconfig/tls-server/server.crt"
+              leader_client_key_file = "/vault/userconfig/tls-server/server.key"
+            }
+
+            retry_join {
+              leader_api_addr = "https://vault-cluster-1.vault-internal.vault.svc.cluster.local:8200"
+              leader_ca_cert_file = "/vault/userconfig/ca/tls.crt"
+              leader_client_cert_file = "/vault/userconfig/tls-server/server.crt"
+              leader_client_key_file = "/vault/userconfig/tls-server/server.key"
+            }
+
+            retry_join {
+              leader_api_addr = "https://vault-cluster-2.vault-internal.vault.svc.cluster.local:8200"
+              leader_ca_cert_file = "/vault/userconfig/ca/tls.crt"
+              leader_client_cert_file = "/vault/userconfig/tls-server/server.crt"
+              leader_client_key_file = "/vault/userconfig/tls-server/server.key"
+            }
+
+            autopilot {
+              cleanup_dead_servers = "true"
+              last_contact_threshold = "200ms"
+              last_contact_failure_threshold = "10m"
+              max_trailing_logs = 250000
+              min_quorum = 5
+              server_stabilization_time = "10s"
+            }
+
+          }
+
+          seal "awskms" {
+          }
+
+          service_registration "kubernetes" {}
+
+  # Vault UI
+  ui:
+    enabled: true
+    serviceType: "LoadBalancer"
+    serviceNodePort: null
+    externalPort: 8200
+
+    # For Added Security, edit the below
+    #loadBalancerSourceRanges:
+    #   - < Your IP RANGE Ex. 10.0.0.0/16 >
+    #   - < YOUR SINGLE IP Ex. 1.78.23.3/32 >

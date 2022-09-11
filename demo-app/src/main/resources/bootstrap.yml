@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: demo-app
+  cloud:
+    vault:
+      host: ${VAULT_SERVER}
+      scheme: https
+      kv:
+        enabled: true
+        application-name: demo-app
+        default-context: demo-app
+      enabled: true
+      authentication: CERT
+      ssl:
+        keyStore: file://${KEYSTORE}
+        trustStore: file://${TRUSTSTORE}
+        keystorePassword: ${KEYSTORE_PASSWORD}
+        trustStorePassword: ${TRUSTSTORE_PASSWORD}
+        keyStoreType: PKCS12
+        certAuthPath: cert
